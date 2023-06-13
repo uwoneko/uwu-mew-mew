@@ -93,11 +93,11 @@ public class ReactionHandler : IMessageHandler
 
     public async Task Init(DiscordSocketClient client)
     {
-        if (File.Exists("data/embedding_cache.bin"))
+        if (File.Exists("data/reaction_cache.bin"))
         {
             Reactions = (List<(TextMatch[] messages, string emoji)>)
-                BinarySerializerHelper.Deserialize(
-                    await File.ReadAllBytesAsync("data/embedding_cache.bin"));
+                BinarySerializerConvert.Deserialize(
+                    await File.ReadAllBytesAsync("data/reaction_cache.bin"));
 
             return;
         }
@@ -114,8 +114,8 @@ public class ReactionHandler : IMessageHandler
             for (var i = 0; i < results.Length; i++) reaction.messages[i].Embedding = results[i];
         }
 
-        await File.WriteAllBytesAsync("data/embedding_cache.bin",
-            BinarySerializerHelper.Serialize(Reactions));
+        await File.WriteAllBytesAsync("data/reaction_cache.bin",
+            BinarySerializerConvert.Serialize(Reactions));
     }
 
     public async Task HandleMessageAsync(SocketUserMessage message, DiscordSocketClient client)

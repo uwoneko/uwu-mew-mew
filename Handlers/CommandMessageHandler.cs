@@ -3,6 +3,7 @@ using System.Text;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
+using Newtonsoft.Json;
 using uwu_mew_mew.Attributes;
 using uwu_mew_mew.Bases;
 using uwu_mew_mew.Modules;
@@ -15,16 +16,24 @@ public class CommandMessageHandler : IMessageHandler
 {
     private static readonly List<Type> ModuleTypes = new()
     {
-        typeof(RealtimeCommandModule),
-        typeof(AiModule)
+        typeof(AiCommandModule),
+        typeof(AiModule),
+        typeof(StableDiffusionModule),
+        typeof(EmbeddingsModule)
     };
 
     private static readonly Dictionary<Type, CommandModule> Modules = new();
 
     private static readonly List<(CommandAttribute attribute, MethodInfo methodInfo)> Commands = new();
+    
+    private static readonly List<(SlashCommandAttribute attribute, MethodInfo methodInfo)> SlashCommands = new();
 
+    private DiscordSocketClient _client;
+    
     public async Task Init(DiscordSocketClient client)
     {
+        _client = client;
+        
         foreach (var type in ModuleTypes)
         {
             var methodInfos = type.GetMethods();
@@ -43,14 +52,99 @@ public class CommandMessageHandler : IMessageHandler
                              throw new Exception($"Could not instantiate module {type.Name}");
             await Modules[type].Init(client);
         }
+        
+        client.Ready += () => ClientOnReady(client);
+        client.SlashCommandExecuted += HandleSlashCommand;
+    }
+
+    private async Task HandleSlashCommand(SocketSlashCommand command)
+    {
+        if(command.ChannelId == 1050422061803245600)
+            return;
+        
+        await command.DeferAsync();
+        
+        foreach (var (commandAttribute, methodInfo) in SlashCommands.DistinctBy(c => c.attribute.Name))
+        {
+            if (command.Data.Name != commandAttribute.Name) continue;
+            
+            switch (methodInfo.GetParameters().Length)
+            {
+                case 0:
+                    methodInfo.Invoke(Modules[methodInfo.DeclaringType!], null);
+                    break;
+                case 1:
+                    methodInfo.Invoke(Modules[methodInfo.DeclaringType!],
+                        new object[] { command });
+                    break;
+                case 2:
+                    methodInfo.Invoke(Modules[methodInfo.DeclaringType!],
+                        new object[] { command, command.Data.Options });
+                    break;
+                case 3:
+                    methodInfo.Invoke(Modules[methodInfo.DeclaringType!],
+                        new object[] { command, command.Data.Options, _client });
+                    break;
+            }
+        }
+    }
+
+    private async Task ClientOnReady(DiscordSocketClient client)
+    {
+        var oldCommands = await _client.GetGlobalApplicationCommandsAsync();
+        if(Environment.GetEnvironmentVariable("slash-reset") is not null)
+            foreach (var command in oldCommands)
+            {
+                Console.WriteLine($"Deleted command \"{command.Name}\"");
+                command.DeleteAsync();
+            }
+
+        foreach (var type in ModuleTypes)
+        {
+            var methodInfos = type.GetMethods();
+            var commands = methodInfos
+                .Where(m => m.GetCustomAttributes(typeof(SlashCommandAttribute), true).Any());
+            
+            foreach (var command in commands)
+            {
+                var attributes =
+                    command.GetCustomAttributes(typeof(SlashCommandAttribute), true)
+                        .Cast<SlashCommandAttribute>();
+
+                var commandAttribute = attributes.First();
+                
+                SlashCommands.Add((commandAttribute, command));
+                
+                var options = commandAttribute.Options.Select(s => JsonConvert.DeserializeObject<SlashCommandOptionBuilder>(s)!).ToList();
+                
+                if(Environment.GetEnvironmentVariable("slash-reset") is null)
+                    if(oldCommands.Any(c => c.Name == commandAttribute.Name && c.Description == commandAttribute.Description && c.Options.Count == options.Count))
+                        continue;
+
+                var slashCommand = new SlashCommandBuilder
+                {
+                    Name = commandAttribute.Name,
+                    Description = commandAttribute.Description,
+                    Options = options
+                };
+
+                await client.CreateGlobalApplicationCommandAsync(slashCommand.Build());
+                Console.WriteLine($"Started creating command \"{commandAttribute.Name}\"");
+            }
+        }
     }
 
     public async Task HandleMessageAsync(SocketUserMessage message, DiscordSocketClient client)
     {
+        if(message.Channel.Id == 1050422061803245600)
+            return;
+        
+        bool anyMatch = false;
         foreach (var (commandAttribute, methodInfo) in Commands)
         {
             if (!commandAttribute.Matches(message, out var argPos)) continue;
 
+            anyMatch = true;
             var context = new SocketCommandContext(client, message);
 
             switch (methodInfo.GetParameters().Length)
@@ -69,7 +163,38 @@ public class CommandMessageHandler : IMessageHandler
             }
         }
 
-        await HandleHelp(message, client);
+        if(await HandleHelp(message, client))
+            anyMatch = true;
+
+        if (!anyMatch)
+        {
+            var argPos = 0;
+            if(!message.HasCharPrefix('%', ref argPos))
+                return;
+            
+            foreach (var (commandAttribute, methodInfo) in Commands.Where(c => c.methodInfo.GetCustomAttributes(typeof(NoMatchCommandAttribute), true).Any()))
+            {
+                if(commandAttribute is not NoMatchCommandAttribute)
+                    continue;
+                
+                var context = new SocketCommandContext(client, message);
+
+                switch (methodInfo.GetParameters().Length)
+                {
+                    case 0:
+                        methodInfo.Invoke(Modules[methodInfo.DeclaringType!], null);
+                        break;
+                    case 1:
+                        methodInfo.Invoke(Modules[methodInfo.DeclaringType!],
+                            new object[] { context });
+                        break;
+                    case 2:
+                        methodInfo.Invoke(Modules[methodInfo.DeclaringType!],
+                            new object[] { context, message.Content.Substring(argPos) });
+                        break;
+                }
+            }
+        }
     }
 
     private async Task<bool> HandleHelp(SocketUserMessage message, DiscordSocketClient client)

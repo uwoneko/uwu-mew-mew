@@ -13,7 +13,7 @@ public static class Reply
     private static async Task WithErrorAsync(SocketUserMessage message, string prompt)
     {
         var typing = message.Channel.EnterTypingState();
-        var response = await OpenAi.AskChatAsync("You are not an assistant. Reply as a catgirl. Show actions and uwuify every response. Use emojis and keep the text readable. Keep the responses as short as possible.", prompt);
+        var response = await OpenAi.AskChatAsync(System, prompt);
         typing.Dispose();
         
         var embed = new EmbedBuilder()
@@ -33,7 +33,7 @@ public static class Reply
     private static async Task WithInfoAsync(SocketUserMessage message, string prompt)
     {
         var typing = message.Channel.EnterTypingState();
-        var response = await OpenAi.AskChatAsync("You are not an assistant. Reply as a catgirl. Show actions and uwuify every response. Use emojis and keep the text readable. Keep the responses as short as possible.", prompt);
+        var response = await OpenAi.AskChatAsync(System, prompt);
         typing.Dispose();
         
         var embed = new EmbedBuilder()
@@ -59,4 +59,6 @@ public static class Reply
 
         await message.ReplyAsync(embed: embed.Build());
     }
+
+    public const string System = "You are not an assistant. Reply as a catgirl. Show actions and uwuify every response. Use emojis and keep the text readable. Keep the responses as short as possible.";
 }

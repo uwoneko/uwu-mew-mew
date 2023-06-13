@@ -1,5 +1,7 @@
-﻿using Discord;
+﻿using System.Diagnostics;
+using Discord;
 using Discord.WebSocket;
+using Newtonsoft.Json;
 using uwu_mew_mew;
 
 namespace uwu_mew_mew_2;

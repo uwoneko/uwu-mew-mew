@@ -4,7 +4,7 @@
 
 namespace uwu_mew_mew_bot.Misc;
 
-public static class BinarySerializerHelper
+public static class BinarySerializerConvert
 {
     public static byte[] Serialize(object obj)
     {
