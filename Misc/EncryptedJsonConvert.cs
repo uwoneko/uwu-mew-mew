@@ -2,7 +2,7 @@
 using System.Text;
 using Newtonsoft.Json;
 
-namespace uwu_mew_mew_bot.Misc;
+namespace uwu_mew_mew.Misc;
 
 public static class EncryptedJsonConvert
 {

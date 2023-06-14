@@ -2,7 +2,7 @@
 
 #pragma warning disable SYSLIB0011
 
-namespace uwu_mew_mew_bot.Misc;
+namespace uwu_mew_mew.Misc;
 
 public static class BinarySerializerConvert
 {

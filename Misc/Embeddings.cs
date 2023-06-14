@@ -1,9 +1,8 @@
 ﻿using MathNet.Numerics;
-using uwu_mew_mew_bot.Misc;
 using uwu_mew_mew.Misc;
 using static MathNet.Numerics.Distance;
 
-namespace uwu_mew_mew_2.Misc;
+namespace uwu_mew_mew.Misc;
 
 public static class Embeddings
 {

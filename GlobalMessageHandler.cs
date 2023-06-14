@@ -1,5 +1,4 @@
 ﻿using Discord.WebSocket;
-using uwu_mew_mew_bot.Handlers;
 using uwu_mew_mew.Bases;
 using uwu_mew_mew.Handlers;
 

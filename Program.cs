@@ -1,4 +1,4 @@
-﻿using uwu_mew_mew_2;
+﻿using uwu_mew_mew;
 
 var bot = new Bot();
 await bot.RunAsync();

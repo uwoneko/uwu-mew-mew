@@ -4,7 +4,7 @@ using Discord.WebSocket;
 using Newtonsoft.Json;
 using uwu_mew_mew;
 
-namespace uwu_mew_mew_2;
+namespace uwu_mew_mew;
 
 public class Bot
 {

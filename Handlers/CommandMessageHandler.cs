@@ -19,7 +19,7 @@ public class CommandMessageHandler : IMessageHandler
         typeof(AiCommandModule),
         typeof(AiModule),
         typeof(StableDiffusionModule),
-        typeof(EmbeddingsModule)
+        typeof(DebugModule)
     };
 
     private static readonly Dictionary<Type, CommandModule> Modules = new();

@@ -2,11 +2,10 @@
 using Discord.WebSocket;
 using MathNet.Numerics;
 using OpenAI_API.Embedding;
-using uwu_mew_mew_bot.Misc;
 using uwu_mew_mew.Bases;
 using uwu_mew_mew.Misc;
 
-namespace uwu_mew_mew_bot.Handlers;
+namespace uwu_mew_mew.Handlers;
 
 public class ReactionHandler : IMessageHandler
 {
@@ -136,7 +135,15 @@ public class ReactionHandler : IMessageHandler
             if (message.Content.ToLower().Trim().Contains(Emoji.Parse(emoji.emoji).ToString()))
                 any = true;
 
-            if (any) await message.AddReactionAsync(Emoji.Parse(emoji.emoji));
+            try
+            {
+                if (any) await message.AddReactionAsync(Emoji.Parse(emoji.emoji));
+            }
+            catch
+            {
+                // return
+                return;
+            }
         }
 
         if (Random.Shared.NextDouble() * 30 < 1)

@@ -85,7 +85,7 @@ public class AiCommandModule : CommandModule
     }
     
     private readonly string _system = """
-Implementation "sbGPT_command" follows these rules:
+Implementation "sbGPT-command" follows these rules:
 {
 - Responds in parsable JSON, never uses anything else to respond.
 - If the response is short (for example an error message), uses text. 
