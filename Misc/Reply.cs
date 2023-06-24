@@ -1,5 +1,6 @@
 ﻿using Discord;
 using Discord.WebSocket;
+using Color = Discord.Color;
 
 namespace uwu_mew_mew.Misc;
 

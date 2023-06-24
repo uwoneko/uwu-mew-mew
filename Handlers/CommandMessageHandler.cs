@@ -3,10 +3,12 @@ using System.Text;
 using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using uwu_mew_mew.Attributes;
 using uwu_mew_mew.Bases;
 using uwu_mew_mew.Modules;
+using Color = Discord.Color;
 using CommandAttribute = uwu_mew_mew.Bases.CommandAttribute;
 using SummaryAttribute = uwu_mew_mew.Attributes.SummaryAttribute;
 
@@ -19,7 +21,9 @@ public class CommandMessageHandler : IMessageHandler
         typeof(AiCommandModule),
         typeof(AiModule),
         typeof(StableDiffusionModule),
-        typeof(DebugModule)
+        typeof(DebugModule),
+        typeof(DumpModule),
+        typeof(OptOutModule)
     };
 
     private static readonly Dictionary<Type, CommandModule> Modules = new();
@@ -144,23 +148,11 @@ public class CommandMessageHandler : IMessageHandler
         {
             if (!commandAttribute.Matches(message, out var argPos)) continue;
 
-            anyMatch = true;
-            var context = new SocketCommandContext(client, message);
+            if (await CheckIfBaka(message)) return;
 
-            switch (methodInfo.GetParameters().Length)
-            {
-                case 0:
-                    methodInfo.Invoke(Modules[methodInfo.DeclaringType!], null);
-                    break;
-                case 1:
-                    methodInfo.Invoke(Modules[methodInfo.DeclaringType!],
-                        new object[] { context });
-                    break;
-                case 2:
-                    methodInfo.Invoke(Modules[methodInfo.DeclaringType!],
-                        new object[] { context, message.Content.Substring(argPos) });
-                    break;
-            }
+            anyMatch = true;
+            
+            ExecuteMethod(methodInfo, message, client, argPos);
         }
 
         if(await HandleHelp(message, client))
@@ -169,31 +161,65 @@ public class CommandMessageHandler : IMessageHandler
         if (!anyMatch)
         {
             var argPos = 0;
-            if(!message.HasCharPrefix('%', ref argPos))
-                return;
-            
-            foreach (var (commandAttribute, methodInfo) in Commands.Where(c => c.methodInfo.GetCustomAttributes(typeof(NoMatchCommandAttribute), true).Any()))
+            if (message.Channel is SocketDMChannel && !message.Author.IsBot)
             {
-                if(commandAttribute is not NoMatchCommandAttribute)
-                    continue;
+                if (await CheckIfBaka(message)) return;
                 
-                var context = new SocketCommandContext(client, message);
-
-                switch (methodInfo.GetParameters().Length)
+                foreach (var (commandAttribute, methodInfo) in Commands.Where(c =>
+                             c.methodInfo.GetCustomAttributes(typeof(PingCommandAttribute), true).Any()))
                 {
-                    case 0:
-                        methodInfo.Invoke(Modules[methodInfo.DeclaringType!], null);
-                        break;
-                    case 1:
-                        methodInfo.Invoke(Modules[methodInfo.DeclaringType!],
-                            new object[] { context });
-                        break;
-                    case 2:
-                        methodInfo.Invoke(Modules[methodInfo.DeclaringType!],
-                            new object[] { context, message.Content.Substring(argPos) });
-                        break;
+                    if (commandAttribute is not PingCommandAttribute)
+                        continue;
+
+                    ExecuteMethod(methodInfo, message, client, argPos);
                 }
             }
+            
+            if (message.HasCharPrefix('%', ref argPos))
+            {
+                if (await CheckIfBaka(message)) return;
+                
+                foreach (var (commandAttribute, methodInfo) in Commands.Where(c =>
+                             c.methodInfo.GetCustomAttributes(typeof(NoMatchCommandAttribute), true).Any()))
+                {
+                    if (commandAttribute is not NoMatchCommandAttribute)
+                        continue;
+                    
+                    ExecuteMethod(methodInfo, message, client, argPos);
+                }
+            }
+        }
+    }
+
+    private async Task<bool> CheckIfBaka(SocketUserMessage message)
+    {
+        if ((await (await ((ITextChannel)await _client.Rest.GetChannelAsync(1120330028048207974)).GetMessageAsync(1120436897727131809)).GetReactionUsersAsync(Emoji.Parse(":thumbsup:"), Int32.MaxValue).FirstAsync()).Any(u => u.Id == message.Author.Id))
+        {
+            await message.ReplyAsync("i refuse to do anything for you. you want to ban me.");
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void ExecuteMethod(MethodInfo methodInfo, SocketUserMessage message, DiscordSocketClient client,
+        int argPos)
+    {
+        var context = new SocketCommandContext(client, message);
+
+        switch (methodInfo.GetParameters().Length)
+        {
+            case 0:
+                methodInfo.Invoke(Modules[methodInfo.DeclaringType!], null);
+                break;
+            case 1:
+                methodInfo.Invoke(Modules[methodInfo.DeclaringType!],
+                    new object[] { context });
+                break;
+            case 2:
+                methodInfo.Invoke(Modules[methodInfo.DeclaringType!],
+                    new object[] { context, message.Content.Substring(argPos) });
+                break;
         }
     }
 
@@ -251,6 +277,9 @@ public class CommandMessageHandler : IMessageHandler
         helpMessage.Append('`');
         helpMessage.Append('`');
         helpMessage.Append('`');
+        helpMessage.Append('\n');
+        helpMessage.Append("[Long Privacy Policy](https://storage.googleapis.com/uwu-mew-mew/uwuprivacy.txt)\n");
+        helpMessage.Append("[Very short Privacy Policy](https://storage.googleapis.com/uwu-mew-mew/uwuprivacy_short.txt)");
         return helpMessage.ToString();
     }
 }

@@ -20,12 +20,12 @@ public class Bot
         var _discord = new DiscordSocketClient(config);
         var _messageHandler = new GlobalMessageHandler(_discord);
 
+        await _messageHandler.InstallAsync();
+
         await _discord.LoginAsync(TokenType.Bot, Token);
         await _discord.StartAsync();
 
         await _discord.SetStatusAsync(UserStatus.Online);
-
-        await _messageHandler.InstallAsync();
         
         Console.WriteLine("Initialized.");
 

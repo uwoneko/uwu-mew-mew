@@ -10,7 +10,8 @@ public class GlobalMessageHandler
     private List<IMessageHandler> _handlers = new()
     {
         new CommandMessageHandler(),
-        new ReactionHandler()
+        new ReactionHandler(),
+        new AgiHandler()
     };
 
     public GlobalMessageHandler(DiscordSocketClient client)

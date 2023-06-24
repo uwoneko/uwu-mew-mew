@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using uwu_mew_mew.Attributes;
 using uwu_mew_mew.Bases;
 using uwu_mew_mew.Misc;
+using Color = Discord.Color;
 
 namespace uwu_mew_mew.Modules;
 

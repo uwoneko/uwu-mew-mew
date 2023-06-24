@@ -35,26 +35,50 @@ public static class Embeddings
     {
         if (Cache.TryGetValue(text, out var cached))
         {
-            return cached;
+            Cache[text] = (cached.embedding, cached.importance + 1);
+            return cached.embedding;
         }
 
         var embedding = await OpenAi.Api.Embeddings.GetEmbeddingsAsync(text);
-        Cache[text] = embedding;
-        Task.Run(() => File.WriteAllBytes("data/embeddings_cache.bin", BinarySerializerConvert.Serialize(Cache)));
+        Cache[text] = (embedding, 0);
+        SaveAndCleanUp();
         return embedding;
     }
 
-    private static readonly Dictionary<string, float[]> Cache;
+    private static readonly Dictionary<string, (float[]? embedding, int importance)> Cache;
+
+    private static async Task SaveAndCleanUp()
+    {
+        try
+        {
+            if (Cache.Count % 2000 == 0)
+            {
+                foreach (var item in 
+                         Cache.Where(item => item.Value.importance <= Cache.Count / 2000))
+                {
+                    Cache.Remove(item.Key);
+                }
+            }
+            if (Cache.Count % 50 == 0)
+            {
+                await File.WriteAllBytesAsync("data/embeddings_cache.bin", BinarySerializerConvert.Serialize(Cache));
+            }
+        }
+        catch
+        {
+            // idc about ur errors
+        }
+    }
 
     static Embeddings()
     {
         try
         {
-            Cache = (Dictionary<string, float[]>)BinarySerializerConvert.Deserialize(File.ReadAllBytes("data/embeddings_cache.bin"));
+            Cache = (Dictionary<string, (float[] embedding, int importance)>)BinarySerializerConvert.Deserialize(File.ReadAllBytes("data/embeddings_cache.bin"));
         }
         catch
         {
-            Cache = new Dictionary<string, float[]>();
+            Cache = new Dictionary<string, (float[] embedding, int importance)>();
         }
     }
 }

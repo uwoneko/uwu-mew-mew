@@ -1,9 +1,11 @@
 ﻿using Discord;
+using Discord.Rest;
 using Discord.WebSocket;
 using MathNet.Numerics;
 using OpenAI_API.Embedding;
 using uwu_mew_mew.Bases;
 using uwu_mew_mew.Misc;
+using uwu_mew_mew.Modules;
 
 namespace uwu_mew_mew.Handlers;
 
@@ -119,17 +121,23 @@ public class ReactionHandler : IMessageHandler
 
     public async Task HandleMessageAsync(SocketUserMessage message, DiscordSocketClient client)
     {
-        var result = await OpenAi.Api.Embeddings
-            .CreateEmbeddingAsync(message.Content.ToLower().Trim());
-        var embedding = result.Data.First().Embedding!;
+        if(OptOutModule.OptedOut.Contains(message.Author.Id))
+            if (!(await (await ((ITextChannel)await client.Rest.GetChannelAsync(1120330028048207974)).GetMessageAsync(1120436897727131809)).GetReactionUsersAsync(Emoji.Parse(":thumbsup:"), Int32.MaxValue).FirstAsync()).Any(u => u.Id == message.Author.Id))
+                return;
+        
+        var embedding = await Embeddings.Get(message.Content.ToLower().Trim());
 
         foreach (var emoji in Reactions)
         {
             var any = false;
             foreach (var m in emoji.messages)
             {
-                if (Distance.Cosine(embedding, m.Embedding) < 0.14f) any = true;
-                if (m.PlainMatch && message.Content.Contains(m.Text)) any = true;
+                if (m.PlainMatch && message.Content.Contains(m.Text))
+                {
+                    any = true;
+                    continue;
+                }
+                if (Embeddings.Distance(embedding, m.Embedding!) < 0.14f) any = true;
             }
 
             if (message.Content.ToLower().Trim().Contains(Emoji.Parse(emoji.emoji).ToString()))
@@ -145,7 +153,7 @@ public class ReactionHandler : IMessageHandler
                 return;
             }
         }
-
+        
         if (Random.Shared.NextDouble() * 30 < 1)
         {
             var emojis = (await OpenAi.AskChatAsync(
