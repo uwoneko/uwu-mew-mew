@@ -23,7 +23,8 @@ public class CommandMessageHandler : IMessageHandler
         typeof(StableDiffusionModule),
         typeof(DebugModule),
         typeof(DumpModule),
-        typeof(OptOutModule)
+        typeof(OptOutModule),
+        typeof(StatusModule)
     };
 
     private static readonly Dictionary<Type, CommandModule> Modules = new();
@@ -67,7 +68,7 @@ public class CommandMessageHandler : IMessageHandler
             return;
         
         await command.DeferAsync();
-        
+
         foreach (var (commandAttribute, methodInfo) in SlashCommands.DistinctBy(c => c.attribute.Name))
         {
             if (command.Data.Name != commandAttribute.Name) continue;
@@ -193,6 +194,9 @@ public class CommandMessageHandler : IMessageHandler
 
     private async Task<bool> CheckIfBaka(SocketUserMessage message)
     {
+        if (message.Author.Id == 1082069574901563453)
+            return true;
+        
         if ((await (await ((ITextChannel)await _client.Rest.GetChannelAsync(1120330028048207974)).GetMessageAsync(1120436897727131809)).GetReactionUsersAsync(Emoji.Parse(":thumbsup:"), Int32.MaxValue).FirstAsync()).Any(u => u.Id == message.Author.Id))
         {
             await message.ReplyAsync("i refuse to do anything for you. you want to ban me.");

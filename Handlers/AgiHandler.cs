@@ -21,10 +21,11 @@ public class AgiHandler : IMessageHandler
         if(message.Author.Id == 1109341287372554250)
             return;
         
-        if(message.Channel.Id is not 1120948298577104967 and not 1110193105627521155)
+        if(message.Channel.Id is not 1120948298577104967 and not 1110193105627521155 and not 1106535271371116594)
             return;
-        
-        if(!message.Content.Contains("uwu mew mew") && !message.Content.Contains("hey uwu") && !message.Content.Contains("hi uwu") && !message.Content.StartsWith("uwu")) 
+
+        var msg = message.Content.ToLower();
+        if(!msg.Contains("uwu mew mew") && !msg.Contains("hey uwu") && !msg.Contains("hi uwu") && !msg.StartsWith("uwu")) 
             return;
 
         var conversation = new List<OpenAi.ChatMessage>();

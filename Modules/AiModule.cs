@@ -65,7 +65,7 @@ public class AiModule : CommandModule
             var conversation = CreateConversation(message, user, system);
 
             var embed = CreateInitialEmbed(context, user);
-            var streamMessage = await context.Message.ReplyAsync("Generating...");
+            var streamMessage = await context.Message.ReplyAsync("Working on your response...");
         
             await StreamResponse(context.Client, conversation, streamMessage, embed, user.Id);
 
@@ -81,13 +81,12 @@ public class AiModule : CommandModule
             await SaveConversationToMemory(user, conversation);
 
             Generating.Remove(user.Id);
-            await streamMessage.ModifyAsync(m => m.Content = $"{streamMessage.Content}\nDone genewating uwu.");
+            await streamMessage.ModifyAsync(m => m.Content = $"{streamMessage.Content}\nDone.");
         }
         catch (Exception e)
         {
             Generating.Remove(user.Id);
-            context.Message.ReplyAsync("now guess what the error was lol. or look in the console");
-            Console.WriteLine(e);
+            context.Message.ReplyAsync($"you broke me qwq...\n\n{e}");
             throw;
         }
     }
@@ -199,6 +198,8 @@ public class AiModule : CommandModule
         }
         else if (component.Data.CustomId == "delete")
         {
+            if((await component.Channel.GetMessageAsync(component.Message.Reference.MessageId.Value)).Author.Id != component.User.Id)
+                return;
             var index = Chats[component.User.Id].Messages.FindLastIndex(m => m.role == "user");
             var newMessages = Chats[component.User.Id].Messages.SkipLast(Chats[component.User.Id].Messages.Count - index);
             Chats[component.User.Id].Messages = newMessages.ToList();
@@ -305,8 +306,13 @@ public class AiModule : CommandModule
         await targetMessage.ModifyAsync(m => m.Components = new ComponentBuilder().WithButton("Stop", stopButtonData, ButtonStyle.Secondary, Emoji.Parse(":x:")).Build());
 
         var model = "gpt-4-0613";
-        if (await OpenAi.GetTokenCount(conversation) > 7000)
-            model = "gpt-4-32k-0613";
+        if (await OpenAi.GetTokenCount(conversation).WaitAsync(TimeSpan.FromSeconds(10)) > 7000)
+        {
+            //model = "gpt-4-32k-0613";
+            await targetMessage.ModifyAsync(m => embed.WithDescription("Conversation is too long"));
+            return;
+        }
+
         var stream = OpenAi.StreamChatCompletionAsyncWithFunctions(conversation, model: model, functions: functions);
 
         async Task Stream(IAsyncEnumerable<(string content, string finishReason, string? functionCall)> streamEnumerable)
@@ -341,6 +347,9 @@ public class AiModule : CommandModule
                             case "generate_image":
                                 await GenerateImage();
                                 break;
+                            case "generate_image_dalle":
+                                await GenerateImageDalle();
+                                break;
                             case "show_image":
                                 await ShowImage();
                                 break;
@@ -351,6 +360,8 @@ public class AiModule : CommandModule
                                 await MessageQuery();
                                 break;
                         }
+                        
+                        await targetMessage.ModifyAsync(m => m.Content = $"{targetMessage.Content}\nDone working on {name}.");
 
                         async Task GenerateImage()
                         {
@@ -358,8 +369,30 @@ public class AiModule : CommandModule
                                 ? arguments["cfg"].Value<double>()
                                 : StableDiffusionModule.DefaultCfgScale;
                             var samplingSteps = arguments["sampling_steps"] != null
-                                ? arguments["cfg"].Value<int>()
+                                ? arguments["sampling_steps"].Value<int>()
                                 : StableDiffusionModule.DefaultSamplingSteps;
+                            StableDiffusionModule.Model sdModel = StableDiffusionModule.Model.Holyshit;
+                            try
+                            {
+                                sdModel = arguments["model"] != null
+                                    ? arguments["model"].Value<string>() switch
+                                    {
+                                        "holysht" => StableDiffusionModule.Model.Holyshit,
+                                        "ghostmix" => StableDiffusionModule.Model.Ghostmix,
+                                        _ => throw new ArgumentOutOfRangeException()
+                                    }
+                                    : StableDiffusionModule.Model.Holyshit;
+                            }
+                            catch
+                            {
+                                conversation.Add(new("function", """
+                                {
+                                    "status": "400 Bad Request",
+                                    "body": "Invalid model."
+                                }
+                                """, name: name));
+                                return;
+                            }
 
                             if (samplingSteps > 100)
                             {
@@ -374,7 +407,7 @@ public class AiModule : CommandModule
 
                             var (image, seed) =
                                 await StableDiffusionModule.GenerateImage(arguments["prompt"].ToString(), cfgScale,
-                                    samplingSteps);
+                                    samplingSteps, model:sdModel);
                             if (!image.Any())
                             {
                                 conversation.Add(new("function", """
@@ -401,6 +434,18 @@ public class AiModule : CommandModule
                                 """, name: name));
 
                             await targetMessage.ModifyAsync(m => m.Embed = embed.Build());
+                        }
+
+                        async Task GenerateImageDalle()
+                        {
+                            var image = await OpenAi.Api.ImageGenerations.CreateImageAsync(arguments["prompt"].Value<string>());
+
+                            conversation.Add(new("function", $$"""
+                                {
+                                    "status": "200 OK",
+                                    "body": "{{image}}"
+                                }
+                                """, name: name));
                         }
 
                         async Task ShowImage()
@@ -708,7 +753,7 @@ public class AiModule : CommandModule
                 "properties": {
                     "prompt": {
                         "type": "string",
-                        "description": "Prompt to generate an image from. Example: 'cat, cute, fluffy'"
+                        "description": "Prompt to generate an image from. Example (dont use): 'cat, cute, fluffy'"
                     },
                     "cfg": {
                         "type": "number",
@@ -721,6 +766,27 @@ public class AiModule : CommandModule
                     "seed": {
                         "type": "number",
                         "description": "Seed for the sampler. __Expected to be empty if user does not asks to modify an image.__"
+                    },
+                    "model": {
+                        "type": "string",
+                        "description": "Model to use for image. Each model runs on a seperate API and gives results with different art style. Default is Holysht. __Expected to be empty if user does not explicitly ask to use.__", 
+                        "enum": ["holysht", "ghostmix"]
+                    }
+                },
+                "required": ["prompt"]
+            }
+        }
+        """),
+        JObject.Parse("""
+        {
+            "name": "generate_image_dalle",
+            "description": "Generates an image using OpenAI Dalle. Usually comes with worse results, use if normal api is down. Use show_image after generating.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": "Prompt to generate an image from. Dalle requres long, detailed prompts to work better. Example (dont use): 'a close up, studio photographic portrait of a white siamese cat that looks curious, backlit ears'"
                     }
                 },
                 "required": ["prompt"]

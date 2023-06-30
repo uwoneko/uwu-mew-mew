@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Dynamic;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
@@ -39,14 +40,13 @@ public static class OpenAi
         return answer;
     }
 
-    public static async Task<string> AskChatAsync(string system, string prompt,
-        float temperature = 1, int maxTokens = 32, string model = "gpt-3.5-turbo")
+    public static async Task<string> AskChatAsync(string system, string prompt, string model = "gpt-3.5-turbo")
     {
-        var answer = (await Api.Chat.CreateChatCompletionAsync(new OpenAI_API.Chat.ChatMessage[]
+        var answer = await CreateChatCompletionAsync(new List<ChatMessage>()
         {
-            new(ChatMessageRole.System, system),
-            new(ChatMessageRole.User, prompt)
-        }, temperature: temperature, max_tokens: maxTokens, model: model)).ToString();
+            new("system", system),
+            new("user", prompt)
+        }, model);
         return answer;
     }
     
@@ -116,6 +116,10 @@ public static class OpenAi
         };
 
         var response = await httpClient.SendAsync(request);
+        
+        if(response.StatusCode == HttpStatusCode.BadGateway)
+            return -1;
+        
         response.EnsureSuccessStatusCode();
 
         var responseBody = JObject.Parse(await response.Content.ReadAsStringAsync());
@@ -124,7 +128,14 @@ public static class OpenAi
     
     public static async Task<string> CreateChatCompletionAsync(List<ChatMessage> chatMessages, string model = "gpt-3.5-turbo-0613")
     {
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Environment.GetEnvironmentVariable("openai"));
+        var key = Environment.GetEnvironmentVariable("openai");
+        var url = apiUrl+"/v1/chat/completions";
+        if (!await CheckOpenAiStatus())
+        {
+            key = Environment.GetEnvironmentVariable("chimera");
+            url = "https://chimeragpt.adventblocks.cc/v1/chat/completions/";
+        }
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
 
         dynamic requestBody = new ExpandoObject();
         requestBody.model = model;
@@ -132,7 +143,7 @@ public static class OpenAi
 
         var content = new StringContent(JsonConvert.SerializeObject(requestBody), Encoding.UTF8, "application/json");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, apiUrl+"/v1/chat/completions")
+        var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
             Content = content
         };
@@ -146,7 +157,14 @@ public static class OpenAi
     
     public static async IAsyncEnumerable<string> StreamChatCompletionAsync(List<ChatMessage> chatMessages, string model = "gpt-3.5-turbo-0613")
     {
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Environment.GetEnvironmentVariable("openai"));
+        var key = Environment.GetEnvironmentVariable("openai");
+        var url = apiUrl+"/v1/chat/completions";
+        if (!await CheckOpenAiStatus())
+        {
+            key = Environment.GetEnvironmentVariable("chimera");
+            url = "https://chimeragpt.adventblocks.cc/v1/chat/completions/";
+        }
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
 
         dynamic requestBody = new ExpandoObject();
         requestBody.model = model;
@@ -155,7 +173,7 @@ public static class OpenAi
 
         var content = new StringContent(JsonConvert.SerializeObject(requestBody), Encoding.UTF8, "application/json");
 
-        var request = new HttpRequestMessage(HttpMethod.Post, apiUrl+"/v1/chat/completions")
+        var request = new HttpRequestMessage(HttpMethod.Post, url)
         {
             Content = content
         };
@@ -186,7 +204,9 @@ public static class OpenAi
     
     public static async IAsyncEnumerable<(string content, string finishReason, string? functionCall)> StreamChatCompletionAsyncWithFunctions(List<ChatMessage> chatMessages, string model = "gpt-3.5-turbo-0613", IReadOnlyList<JObject>? functions = null)
     {
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Environment.GetEnvironmentVariable("openai"));
+        var key = Environment.GetEnvironmentVariable("openai");
+        var url = apiUrl+"/v1/chat/completions";
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
 
         dynamic requestBody = new ExpandoObject();
         requestBody.model = model;
@@ -217,12 +237,16 @@ public static class OpenAi
 
         while(!gotAnyResponse)
         {
-            var request = new HttpRequestMessage(HttpMethod.Post, apiUrl+"/v1/chat/completions")
+            var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
                 Content = content
             };
             
             var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+            
+            if(response.StatusCode == HttpStatusCode.BadGateway)
+                continue;
+            
             response.EnsureSuccessStatusCode();
 
             using var streamReader = new StreamReader(await response.Content.ReadAsStreamAsync());
@@ -252,6 +276,68 @@ public static class OpenAi
             }
 
             await Task.Delay(3000);
+        }
+    }
+
+    public static async Task<bool> CheckOpenAiStatus()
+    {
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Environment.GetEnvironmentVariable("openai"));
+
+        dynamic requestBody = new ExpandoObject();
+        requestBody.model = "gpt-3.5-turbo";
+        requestBody.max_tokens = 1;
+        requestBody.messages = new object[]
+        {
+            new{role="user", content="Hi"}
+        };
+
+        var content = new StringContent(JsonConvert.SerializeObject(requestBody), Encoding.UTF8, "application/json");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, apiUrl+"/v1/chat/completions")
+        {
+            Content = content
+        };
+
+        try
+        {
+            var response = await httpClient.SendAsync(request);
+
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static async Task<bool> CheckChimeraStatus()
+    {
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Environment.GetEnvironmentVariable("chimera"));
+
+        dynamic requestBody = new ExpandoObject();
+        requestBody.model = "gpt-3.5-turbo";
+        requestBody.max_tokens = 1;
+        requestBody.messages = new object[]
+        {
+            new{role="user", content="Hi"}
+        };
+
+        var content = new StringContent(JsonConvert.SerializeObject(requestBody), Encoding.UTF8, "application/json");
+
+        var request = new HttpRequestMessage(HttpMethod.Post, "https://chimeragpt.adventblocks.cc/v1/chat/completions")
+        {
+            Content = content
+        };
+
+        try
+        {
+            var response = await httpClient.SendAsync(request);
+
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
         }
     }
 }

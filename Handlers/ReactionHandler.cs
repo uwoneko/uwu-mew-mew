@@ -158,7 +158,7 @@ public class ReactionHandler : IMessageHandler
         {
             var emojis = (await OpenAi.AskChatAsync(
                     "Send 1 emoji as reaction to input message from perspective of a catgirl without anything else",
-                    $"Message: \"{message.Content}\"", 1.3f, 3))
+                    $"Message: \"{message.Content}\""))
                 .Replace(" ", "");
 
             for (var i = 0; i < emojis.Length; i += 2)

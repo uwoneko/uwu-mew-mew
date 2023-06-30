@@ -21,7 +21,7 @@ public class AiCommandModule : CommandModule
         string result;
         try
         {
-            var task = OpenAi.AskChatAsync(_system, command, model: "gpt-4", maxTokens: 512);
+            var task = OpenAi.AskChatAsync(_system, command, model: "gpt-4");
             if (await Task.WhenAny(task, Task.Delay(300000)) == task)
             {
                 result = task.Result;
